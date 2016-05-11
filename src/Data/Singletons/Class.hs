@@ -31,6 +31,7 @@ module Data.Singletons.Class
   , SomeSingWith1'
   , SomeSingWith2(..)
   , SomeSingWith2'
+  , ClassySomeSing(..)
   -- * Classes for Applied
   -- $appliedClasses
   , EqApplied1(..)
@@ -40,6 +41,8 @@ module Data.Singletons.Class
   -- * Functions
   , showKind
   , readMaybeKind
+  , eqSome
+  , compareSome
   ) where
 
 import Data.Hashable
@@ -269,4 +272,28 @@ readMaybeKind :: ReadKind kproxy => String -> Maybe (SomeSing kproxy)
 readMaybeKind s = listToMaybe 
   $ mapMaybe (\(a,x) -> if null x then Just a else Nothing) 
   $ readsPrecKind 0 s
+
+-- | Helper function to demote an equality check. It would be nice if
+--   this could be added as an 'Eq' instance for 'SomeSing', but it
+--   would required collapsing a lot of the modules in 'singletons'
+--   to prevent cyclic imports. Or it could be provided as an orphan 
+--   instance.
+eqSome :: SEq kproxy => SomeSing kproxy -> SomeSing kproxy -> Bool
+eqSome (SomeSing a) (SomeSing b) = fromSing (a %:== b)
+
+-- | Helper function to demote a comparison
+compareSome :: SOrd kproxy => SomeSing kproxy -> SomeSing kproxy -> Ordering
+compareSome (SomeSing a) (SomeSing b) = fromSing (sCompare a b)
+
+-- | This is a wrapper for 'SomeSing' that provides common typeclass instances
+--   for it. This can be helpful when you want to use @Data.Set@ with 'SomeSing'.
+newtype ClassySomeSing kproxy = ClassySomeSing { getClassySomeSing :: SomeSing kproxy }
+
+instance SEq kproxy => Eq (ClassySomeSing kproxy) where
+  ClassySomeSing a == ClassySomeSing b = eqSome a b
+
+instance SOrd kproxy => Ord (ClassySomeSing kproxy) where
+  compare (ClassySomeSing a) (ClassySomeSing b) = compareSome a b
+
+
 

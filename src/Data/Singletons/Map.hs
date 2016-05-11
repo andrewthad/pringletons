@@ -1383,10 +1383,6 @@ foldlStrict f = go
     go z (x:xs) = z `seq` go (f z x) xs
 
 
--- Helper function to demote a comparison
-compareSome :: SOrd kproxy => SomeSing kproxy -> SomeSing kproxy -> Ordering
-compareSome (SomeSing a) (SomeSing b) = fromSing (sCompare a b)
-
 ltSome :: SOrd kproxy => SomeSing kproxy -> SomeSing kproxy -> Bool
 ltSome (SomeSing a) (SomeSing b) = fromSing (a %:< b)
 
