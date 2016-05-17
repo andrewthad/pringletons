@@ -17,6 +17,7 @@ import Data.Aeson
 import Data.Aeson.Types (Parser)
 import Data.Text (Text)
 import Data.Hashable
+import Data.Vinyl.Core (Rec(..))
 
 data SingMap (kproxy :: KProxy j) (f :: j -> *) where
     Tip :: SingMap kproxy f
@@ -1404,4 +1405,14 @@ unifyOnEq a b x =
   case testEquality a b of
     Nothing -> error "unifyOnEq: inconsistent SEq and SDecide instances"
     Just Refl -> x
+
+---------------------
+-- Record Helpers
+---------------------
+fromRec :: (SOrd kproxy, SDecide kproxy) => Rec (SingWith1 kproxy f) rs -> SingMap kproxy f
+fromRec r = insertRec r empty
+
+insertRec :: (SOrd kproxy, SDecide kproxy) => Rec (SingWith1 kproxy f) rs -> SingMap kproxy f -> SingMap kproxy f
+insertRec RNil m = m
+insertRec (SingWith1 s v :& rs) m = insert s v (insertRec rs m)
 

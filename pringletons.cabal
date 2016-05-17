@@ -25,6 +25,7 @@ library
     , aeson
     , text
     , vector
+    , vinyl
     , unordered-containers
     , template-haskell
   default-language:    Haskell2010

@@ -31,6 +31,7 @@ module Data.Singletons.Class
   , SomeSingWith1'
   , SomeSingWith2(..)
   , SomeSingWith2'
+  , SingWith1(..)
   , ClassySomeSing(..)
   -- * Classes for Applied
   -- $appliedClasses
@@ -194,6 +195,9 @@ newtype Applied2 (f :: TyFun k (TyFun j * -> *) -> *) (a :: k) (b :: j) =
 
 newtype Applied3 (f :: TyFun k (TyFun j (TyFun l * -> *) -> *) -> *) (a :: k) (b :: j) (c :: l) =
   Applied3 { getApplied3 :: Apply (Apply (Apply f a) b) c }
+
+data SingWith1 (kproxy :: KProxy k) (f :: k -> *) (a :: k) where
+  SingWith1 :: Sing a -> f a -> SingWith1 'KProxy f a
 
 data SomeSingWith1 (kproxy :: KProxy k) (f :: k -> *) where
   SomeSingWith1 :: Sing a -> f a -> SomeSingWith1 'KProxy f
