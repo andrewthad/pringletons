@@ -261,8 +261,15 @@ instance (ToJSONKind kproxy1, ToJSONKind kproxy2, ToJSONSing2 f) => ToJSON (Some
   toJSON (SomeSingWith2 s1 s2 v) = 
     toJSON [toJSONKind s1, toJSONKind s2, toJSONSing2 s1 s2 v]
 
-instance FromJSON (SomeSingWith2 kproxy1 kproxy2 f) where
-  parseJSON = error "from json somesingwith2: write this"
+instance (FromJSONKind kproxy1, FromJSONKind kproxy2, FromJSONSing2 f) => FromJSON (SomeSingWith2 kproxy1 kproxy2 f) where
+  parseJSON (Aeson.Array xs) = case Vector.toList xs of
+    [v1,v2,v] -> do
+      SomeSing s1 <- parseJSONKind v1
+      SomeSing s2 <- parseJSONKind v2
+      a <- parseJSONSing2 s1 s2 v
+      return (SomeSingWith2 s1 s2 a)
+    _ -> fail "SomeSingWith2: expected Array of three elements"
+  parseJSON _ = mempty
 
 instance (HashableKind kproxy1, HashableSing1 f) => Hashable (SomeSingWith1 kproxy1 f) where
   hashWithSalt i (SomeSingWith1 s v) = i

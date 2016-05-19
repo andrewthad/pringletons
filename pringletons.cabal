@@ -1,5 +1,5 @@
 name:                pringletons
-version:             0.1.0.0
+version:             0.3
 synopsis:            Classes and data structures complementing the singletons library
 description:         Please see README.md
 homepage:            https://github.com/andrewthad/pringletons
