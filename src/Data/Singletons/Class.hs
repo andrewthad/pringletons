@@ -170,6 +170,11 @@ class (kproxy ~ 'KProxy) => ToJSONKind (kproxy :: KProxy a) where
 
 class (kproxy ~ 'KProxy) => FromJSONKind (kproxy :: KProxy a) where
   parseJSONKind :: Aeson.Value -> Aeson.Parser (SomeSing kproxy)
+  default parseJSONKind :: ReadKind kproxy => Aeson.Value -> Aeson.Parser (SomeSing kproxy)
+  parseJSONKind (Aeson.String t) = let s = Text.unpack t in 
+    case readMaybeKind s of
+      Nothing -> fail ("Could not parse singleton from: " ++ s)
+      Just a -> return a
 
 class (kproxy ~ 'KProxy) => ToJSONKeyKind (kproxy :: KProxy a) where
   toJSONKeyKind :: Sing (x :: a) -> Text
@@ -181,7 +186,7 @@ class (kproxy ~ 'KProxy) => FromJSONKeyKind (kproxy :: KProxy a) where
   default parseJSONKeyKind :: ReadKind kproxy => Text -> Aeson.Parser (SomeSing kproxy)
   parseJSONKeyKind t = let s = Text.unpack t in 
     case readMaybeKind s of
-      Nothing -> fail ("Could not parse key " ++ s)
+      Nothing -> fail ("Could not parse key: " ++ s)
       Just a -> return a
 
 ------------------------
