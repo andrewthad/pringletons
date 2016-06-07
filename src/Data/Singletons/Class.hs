@@ -8,6 +8,7 @@ module Data.Singletons.Class
   , EqSing2(..)
   , OrdSing1(..)
   , OrdSing2(..)
+  , ShowSing2(..)
   , HashableSing1(..)
   , HashableSing2(..)
   , ToJSONSing1(..)
@@ -54,6 +55,7 @@ import Data.Singletons.Decide
 import Data.Text (Text)
 import Data.Functor.Identity
 import Text.Read (readMaybe)
+import Text.Show (showChar, showString, showParen)
 import qualified Data.Text as Text
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson
@@ -112,6 +114,9 @@ class EqSing1 f => OrdSing1 f where
 
 class EqSing2 f => OrdSing2 f where
   compareSing2 :: Sing a -> Sing b -> f a b -> f a b -> Ordering
+
+class ShowSing2 f where
+  showsPrecSing2 :: Int -> Sing a -> Sing b -> f a b -> ShowS
 
 class HashableSing1 f where
   hashWithSaltSing1 :: Sing a -> Int -> f a -> Int
@@ -261,6 +266,16 @@ instance (EqSing1 f, SDecide kproxy) => Eq (SomeSingWith1 kproxy f) where
     case testEquality s1 s2 of
       Nothing -> False
       Just Refl -> eqSing1 s1 v1 v2
+
+instance (ShowKind kproxy1, ShowKind kproxy2, ShowSing2 f) => Show (SomeSingWith2 kproxy1 kproxy2 f) where
+  showsPrec i (SomeSingWith2 s1 s2 f) = 
+    showString "SomeSingWith2 " . showParen True
+      ( showsPrecKind 11 s1
+      . showChar ' '
+      . showsPrecKind 11 s2
+      . showChar ' '
+      . showsPrecSing2 11 s1 s2 f
+      )
 
 instance (ToJSONKind kproxy1, ToJSONKind kproxy2, ToJSONSing2 f) => ToJSON (SomeSingWith2 kproxy1 kproxy2 f) where
   toJSON (SomeSingWith2 s1 s2 v) = 
