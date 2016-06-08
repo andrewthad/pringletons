@@ -199,6 +199,7 @@ class (kproxy ~ 'KProxy) => FromJSONKeyKind (kproxy :: KProxy a) where
 ------------------------
 newtype Applied1 (f :: TyFun k * -> *) (a :: k) =
   Applied1 { getApplied1 :: Apply f a }
+  deriving (Eq,Ord,Read,Show,Hashable,ToJSON,FromJSON)
 
 newtype Applied2 (f :: TyFun k (TyFun j * -> *) -> *) (a :: k) (b :: j) =
   Applied2 { getApplied2 :: Apply (Apply f a) b }
