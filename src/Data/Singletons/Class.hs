@@ -278,6 +278,12 @@ instance (ShowKind kproxy1, ShowKind kproxy2, ShowSing2 f) => Show (SomeSingWith
       . showsPrecSing2 11 s1 s2 f
       )
 
+instance (SDecide kproxy1, SDecide kproxy2, EqSing2 f) => Eq (SomeSingWith2 kproxy1 kproxy2 f) where
+  SomeSingWith2 s1 s2 a == SomeSingWith2 t1 t2 b = fromMaybe False $ do
+    Refl <- testEquality s1 t1
+    Refl <- testEquality s2 t2
+    return $ eqSing2 s1 s2 a b
+
 instance (ToJSONKind kproxy1, ToJSONKind kproxy2, ToJSONSing2 f) => ToJSON (SomeSingWith2 kproxy1 kproxy2 f) where
   toJSON (SomeSingWith2 s1 s2 v) = 
     toJSON [toJSONKind s1, toJSONKind s2, toJSONSing2 s1 s2 v]
