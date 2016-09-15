@@ -9,6 +9,7 @@ module Data.Singletons.Class
   , OrdSing1(..)
   , OrdSing2(..)
   , ShowSing2(..)
+  , ReadSing2(..)
   , HashableSing1(..)
   , HashableSing2(..)
   , ToJSONSing1(..)
