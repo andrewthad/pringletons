@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Data.Singletons.Class 
-  ( 
+module Data.Singletons.Class
+  (
   -- * Singleton Classes
   -- $singletonClasses
     EqSing1(..)
@@ -54,7 +54,9 @@ import Data.Singletons.Prelude
 import Data.Singletons.Decide
 import Data.Text (Text)
 import Data.Functor.Identity
-import Text.Read (readMaybe)
+import Text.Read.Lex (Lexeme(Ident))
+import Text.Read (readMaybe,readPrec,ReadPrec,lexP,parens)
+import Text.ParserCombinators.ReadPrec (readPrec_to_S, prec, step)
 import Text.Show (showChar, showString, showParen)
 import qualified Data.Text as Text
 import qualified Data.Aeson as Aeson
@@ -67,8 +69,8 @@ import qualified Data.Vector as Vector
 import Data.Function ((&))
 
 {- $singletonClasses
- 
- These are singleton variants of the commonly used classes from @base@, 
+
+ These are singleton variants of the commonly used classes from @base@,
  @hashable@, and @aeson@. These variants work on higher-kinded types instead
  of on ground types. For example, if you wrote the following:
 
@@ -89,9 +91,9 @@ import Data.Function ((&))
  >     SMyChar -> a == b
  >     SMyBool -> a == b
 
- For our example @MyValue@ type, the @EqSing1@ instance is trivial. We simply 
+ For our example @MyValue@ type, the @EqSing1@ instance is trivial. We simply
  pattern match on the singleton and then do the same thing in each case. This
- kind of pattern matching ends up happening any time our universe 
+ kind of pattern matching ends up happening any time our universe
  interpreter maps to types that all have @Eq@ instances. Since writing this
  out is tedious, we can instead use a template haskell function provided in
  the @Data.Case.Enumerate@ module:
@@ -118,6 +120,9 @@ class EqSing2 f => OrdSing2 f where
 class ShowSing2 f where
   showsPrecSing2 :: Int -> Sing a -> Sing b -> f a b -> ShowS
 
+class ReadSing2 f where
+  readPrecSing2 :: Sing a -> Sing b -> ReadPrec (f a b)
+
 class HashableSing1 f where
   hashWithSaltSing1 :: Sing a -> Int -> f a -> Int
 
@@ -137,14 +142,14 @@ class FromJSONSing2 f where
   parseJSONSing2 :: Sing a -> Sing b -> Aeson.Value -> Aeson.Parser (f a b)
 
 {- $kindClasses
- 
- These are kind classes. They express that something is true for all 
+
+ These are kind classes. They express that something is true for all
  singletons of a particular kind. Note that these are different from the
  kind classes provided in the @singletons@ library itself. The methods
  in those classes ('SOrd','SEnum',etc.) work entirely on singletons. Here,
  the methods also work with normal data types.
 
- Notice that classes like @EqKind@ and @OrdKind@ have been omitted from 
+ Notice that classes like @EqKind@ and @OrdKind@ have been omitted from
  this library. The reason is that that functions that would be provided by
  these can be trivially recovered by demoting the results of methods in 'SEq'
  and 'SOrd'.
@@ -159,9 +164,12 @@ class (kproxy ~ 'KProxy) => ShowKind (kproxy :: KProxy a) where
   showsPrecKind i s xs = showsPrec i (fromSing s) xs
 
 class (kproxy ~ 'KProxy) => ReadKind (kproxy :: KProxy a) where
-  readsPrecKind :: Int -> ReadS (SomeSing kproxy)
-  default readsPrecKind :: (SingKind kproxy, Read (DemoteRep kproxy)) => Int -> ReadS (SomeSing kproxy)
-  readsPrecKind i s = map (first toSing) (readsPrec i s)
+  readPrecKind :: ReadPrec (SomeSing kproxy)
+  default readPrecKind :: (SingKind kproxy, Read (DemoteRep kproxy)) => ReadPrec (SomeSing kproxy)
+  readPrecKind = fmap toSing readPrec
+  -- readsPrecKind :: Int -> ReadS (SomeSing kproxy)
+  -- default readsPrecKind :: (SingKind kproxy, Read (DemoteRep kproxy)) => Int -> ReadS (SomeSing kproxy)
+  -- readsPrecKind i s = map (first toSing) (readsPrec i s)
 
 class (kproxy ~ 'KProxy) => HashableKind (kproxy :: KProxy a) where
   hashWithSaltKind :: Int -> Sing (x :: a) -> Int
@@ -176,7 +184,7 @@ class (kproxy ~ 'KProxy) => ToJSONKind (kproxy :: KProxy a) where
 class (kproxy ~ 'KProxy) => FromJSONKind (kproxy :: KProxy a) where
   parseJSONKind :: Aeson.Value -> Aeson.Parser (SomeSing kproxy)
   default parseJSONKind :: ReadKind kproxy => Aeson.Value -> Aeson.Parser (SomeSing kproxy)
-  parseJSONKind (Aeson.String t) = let s = Text.unpack t in 
+  parseJSONKind (Aeson.String t) = let s = Text.unpack t in
     case readMaybeKind s of
       Nothing -> fail ("Could not parse singleton from: " ++ s)
       Just a -> return a
@@ -189,7 +197,7 @@ class (kproxy ~ 'KProxy) => ToJSONKeyKind (kproxy :: KProxy a) where
 class (kproxy ~ 'KProxy) => FromJSONKeyKind (kproxy :: KProxy a) where
   parseJSONKeyKind :: Text -> Aeson.Parser (SomeSing kproxy)
   default parseJSONKeyKind :: ReadKind kproxy => Text -> Aeson.Parser (SomeSing kproxy)
-  parseJSONKeyKind t = let s = Text.unpack t in 
+  parseJSONKeyKind t = let s = Text.unpack t in
     case readMaybeKind s of
       Nothing -> fail ("Could not parse key: " ++ s)
       Just a -> return a
@@ -221,7 +229,7 @@ data SomeSingWith2 (kproxy1 :: KProxy k) (kproxy2 :: KProxy j) (f :: k -> j -> *
 type SomeSingWith2' = SomeSingWith2 'KProxy 'KProxy
 
 {- $appliedClasses
- 
+
  These are additional classes used to provide instances for 'Applied1'.
  If you have a defunctionalized typeclass that provides produces types
  in the category hask, you can use this. Instances will often look like
@@ -263,13 +271,13 @@ instance HashableApplied1 f => HashableSing1 (Applied1 f) where
   hashWithSaltSing1 s i (Applied1 a) = hashWithSaltApplied1 (Proxy :: Proxy f) s i a
 
 instance (EqSing1 f, SDecide kproxy) => Eq (SomeSingWith1 kproxy f) where
-  SomeSingWith1 s1 v1 == SomeSingWith1 s2 v2 = 
+  SomeSingWith1 s1 v1 == SomeSingWith1 s2 v2 =
     case testEquality s1 s2 of
       Nothing -> False
       Just Refl -> eqSing1 s1 v1 v2
 
 instance (ShowKind kproxy1, ShowKind kproxy2, ShowSing2 f) => Show (SomeSingWith2 kproxy1 kproxy2 f) where
-  showsPrec i (SomeSingWith2 s1 s2 f) = 
+  showsPrec i (SomeSingWith2 s1 s2 f) =
     showString "SomeSingWith2 " . showParen True
       ( showsPrecKind 11 s1
       . showChar ' '
@@ -278,6 +286,15 @@ instance (ShowKind kproxy1, ShowKind kproxy2, ShowSing2 f) => Show (SomeSingWith
       . showsPrecSing2 11 s1 s2 f
       )
 
+instance (ReadKind kproxy1, ReadKind kproxy2, ReadSing2 f) => Read (SomeSingWith2 kproxy1 kproxy2 f) where
+  readPrec = parens $ prec 10 $ do
+    Ident "SomeSingWith2" <- lexP
+    SomeSing s1 <- step readPrecKind
+    SomeSing s2 <- step readPrecKind
+    f <- step (readPrecSing2 s1 s2)
+    return (SomeSingWith2 s1 s2 f)
+
+
 instance (SDecide kproxy1, SDecide kproxy2, EqSing2 f) => Eq (SomeSingWith2 kproxy1 kproxy2 f) where
   SomeSingWith2 s1 s2 a == SomeSingWith2 t1 t2 b = fromMaybe False $ do
     Refl <- testEquality s1 t1
@@ -285,7 +302,7 @@ instance (SDecide kproxy1, SDecide kproxy2, EqSing2 f) => Eq (SomeSingWith2 kpro
     return $ eqSing2 s1 s2 a b
 
 instance (ToJSONKind kproxy1, ToJSONKind kproxy2, ToJSONSing2 f) => ToJSON (SomeSingWith2 kproxy1 kproxy2 f) where
-  toJSON (SomeSingWith2 s1 s2 v) = 
+  toJSON (SomeSingWith2 s1 s2 v) =
     toJSON [toJSONKind s1, toJSONKind s2, toJSONSing2 s1 s2 v]
 
 instance (FromJSONKind kproxy1, FromJSONKind kproxy2, FromJSONSing2 f) => FromJSON (SomeSingWith2 kproxy1 kproxy2 f) where
@@ -300,21 +317,24 @@ instance (FromJSONKind kproxy1, FromJSONKind kproxy2, FromJSONSing2 f) => FromJS
 
 instance (HashableKind kproxy1, HashableSing1 f) => Hashable (SomeSingWith1 kproxy1 f) where
   hashWithSalt i (SomeSingWith1 s v) = i
-    & flip hashWithSaltKind s 
+    & flip hashWithSaltKind s
     & flip (hashWithSaltSing1 s) v
 
 showKind :: forall (kproxy :: KProxy k) (a :: k). ShowKind kproxy => Sing a -> String
 showKind x = showsPrecKind 0 x ""
 
+readsPrecKind :: ReadKind kproxy => Int -> ReadS (SomeSing kproxy)
+readsPrecKind = readPrec_to_S readPrecKind
+
 readMaybeKind :: ReadKind kproxy => String -> Maybe (SomeSing kproxy)
-readMaybeKind s = listToMaybe 
-  $ mapMaybe (\(a,x) -> if null x then Just a else Nothing) 
+readMaybeKind s = listToMaybe
+  $ mapMaybe (\(a,x) -> if null x then Just a else Nothing)
   $ readsPrecKind 0 s
 
 -- | Helper function to demote an equality check. It would be nice if
 --   this could be added as an 'Eq' instance for 'SomeSing', but it
 --   would required collapsing a lot of the modules in 'singletons'
---   to prevent cyclic imports. Or it could be provided as an orphan 
+--   to prevent cyclic imports. Or it could be provided as an orphan
 --   instance.
 eqSome :: SEq kproxy => SomeSing kproxy -> SomeSing kproxy -> Bool
 eqSome (SomeSing a) (SomeSing b) = fromSing (a %:== b)
