@@ -1,4 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeInType #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Data.Singletons.Class
   (
@@ -68,6 +70,7 @@ import Data.Proxy
 import Control.Arrow (first)
 import qualified Data.Vector as Vector
 import Data.Function ((&))
+import Data.Kind (Type)
 
 {- $singletonClasses
 
@@ -159,45 +162,45 @@ class FromJSONSing2 f where
  singleton and using the corresponding method from the normal typeclass.
 -}
 
-class (kproxy ~ 'KProxy) => ShowKind (kproxy :: KProxy a) where
-  showsPrecKind :: Int -> Sing (x :: a) -> ShowS
-  default showsPrecKind :: (SingKind kproxy, Show (DemoteRep kproxy)) => Int -> Sing (x :: a) -> ShowS
+class ShowKind k where
+  showsPrecKind :: Int -> Sing (x :: k) -> ShowS
+  default showsPrecKind :: (SingKind k, Show (DemoteRep k)) => Int -> Sing (x :: k) -> ShowS
   showsPrecKind i s xs = showsPrec i (fromSing s) xs
 
-class (kproxy ~ 'KProxy) => ReadKind (kproxy :: KProxy a) where
-  readPrecKind :: ReadPrec (SomeSing kproxy)
-  default readPrecKind :: (SingKind kproxy, Read (DemoteRep kproxy)) => ReadPrec (SomeSing kproxy)
+class ReadKind k where
+  readPrecKind :: ReadPrec (SomeSing k)
+  default readPrecKind :: (SingKind k, Read (DemoteRep k)) => ReadPrec (SomeSing k)
   readPrecKind = fmap toSing readPrec
   -- readsPrecKind :: Int -> ReadS (SomeSing kproxy)
   -- default readsPrecKind :: (SingKind kproxy, Read (DemoteRep kproxy)) => Int -> ReadS (SomeSing kproxy)
   -- readsPrecKind i s = map (first toSing) (readsPrec i s)
 
-class (kproxy ~ 'KProxy) => HashableKind (kproxy :: KProxy a) where
-  hashWithSaltKind :: Int -> Sing (x :: a) -> Int
-  default hashWithSaltKind :: (SingKind kproxy, Hashable (DemoteRep kproxy)) => Int -> Sing (x :: a) -> Int
+class HashableKind k where
+  hashWithSaltKind :: Int -> Sing (x :: k) -> Int
+  default hashWithSaltKind :: (SingKind k, Hashable (DemoteRep k)) => Int -> Sing (x :: k) -> Int
   hashWithSaltKind i s = hashWithSalt i (fromSing s)
 
-class (kproxy ~ 'KProxy) => ToJSONKind (kproxy :: KProxy a) where
-  toJSONKind :: Sing (x :: a) -> Aeson.Value
-  default toJSONKind :: ShowKind kproxy => Sing (x :: a) -> Aeson.Value
+class ToJSONKind k where
+  toJSONKind :: Sing (x :: k) -> Aeson.Value
+  default toJSONKind :: ShowKind k => Sing (x :: k) -> Aeson.Value
   toJSONKind s = Aeson.String (Text.pack (showKind s))
 
-class (kproxy ~ 'KProxy) => FromJSONKind (kproxy :: KProxy a) where
-  parseJSONKind :: Aeson.Value -> Aeson.Parser (SomeSing kproxy)
-  default parseJSONKind :: ReadKind kproxy => Aeson.Value -> Aeson.Parser (SomeSing kproxy)
+class FromJSONKind k where
+  parseJSONKind :: Aeson.Value -> Aeson.Parser (SomeSing k)
+  default parseJSONKind :: ReadKind k => Aeson.Value -> Aeson.Parser (SomeSing k)
   parseJSONKind (Aeson.String t) = let s = Text.unpack t in
     case readMaybeKind s of
       Nothing -> fail ("Could not parse singleton from: " ++ s)
       Just a -> return a
 
-class (kproxy ~ 'KProxy) => ToJSONKeyKind (kproxy :: KProxy a) where
-  toJSONKeyKind :: Sing (x :: a) -> Text
-  default toJSONKeyKind :: ShowKind kproxy => Sing (x :: a) -> Text
+class ToJSONKeyKind k where
+  toJSONKeyKind :: Sing (x :: k) -> Text
+  default toJSONKeyKind :: ShowKind k => Sing (x :: k) -> Text
   toJSONKeyKind s = Text.pack (showKind s)
 
-class (kproxy ~ 'KProxy) => FromJSONKeyKind (kproxy :: KProxy a) where
-  parseJSONKeyKind :: Text -> Aeson.Parser (SomeSing kproxy)
-  default parseJSONKeyKind :: ReadKind kproxy => Text -> Aeson.Parser (SomeSing kproxy)
+class FromJSONKeyKind k where
+  parseJSONKeyKind :: Text -> Aeson.Parser (SomeSing k)
+  default parseJSONKeyKind :: ReadKind k => Text -> Aeson.Parser (SomeSing k)
   parseJSONKeyKind t = let s = Text.unpack t in
     case readMaybeKind s of
       Nothing -> fail ("Could not parse key: " ++ s)
@@ -206,28 +209,43 @@ class (kproxy ~ 'KProxy) => FromJSONKeyKind (kproxy :: KProxy a) where
 ------------------------
 -- Data Types
 ------------------------
-newtype Applied1 (f :: TyFun k * -> *) (a :: k) =
+newtype Applied1 (f :: TyFun k Type -> Type) (a :: k) =
   Applied1 { getApplied1 :: Apply f a }
-  deriving (Eq,Ord,Read,Show,Hashable,ToJSON,FromJSON)
 
-newtype Applied2 (f :: TyFun k (TyFun j * -> *) -> *) (a :: k) (b :: j) =
+-- These all require FlexibleContexts. I do not like this,
+-- but having these instances is important. There is probably
+-- a way to get them without using that extension, but it
+-- will require more work.
+deriving instance Eq (Apply f a) => Eq (Applied1 f a)
+deriving instance Ord (Apply f a) => Ord (Applied1 f a)
+deriving instance Read (Apply f a) => Read (Applied1 f a)
+deriving instance Show (Apply f a) => Show (Applied1 f a)
+deriving instance Hashable (Apply f a) => Hashable (Applied1 f a)
+deriving instance ToJSON (Apply f a) => ToJSON (Applied1 f a)
+deriving instance FromJSON (Apply f a) => FromJSON (Applied1 f a)
+
+newtype Applied2 (f :: TyFun k (TyFun j Type -> Type) -> Type) (a :: k) (b :: j) =
   Applied2 { getApplied2 :: Apply (Apply f a) b }
 
-newtype Applied3 (f :: TyFun k (TyFun j (TyFun l * -> *) -> *) -> *) (a :: k) (b :: j) (c :: l) =
+newtype Applied3 (f :: TyFun k (TyFun j (TyFun l Type -> Type) -> Type) -> Type) (a :: k) (b :: j) (c :: l) =
   Applied3 { getApplied3 :: Apply (Apply (Apply f a) b) c }
 
-data SingWith1 (kproxy :: KProxy k) (f :: k -> *) (a :: k) where
-  SingWith1 :: Sing a -> f a -> SingWith1 'KProxy f a
+data SingWith1 k (f :: k -> Type) (a :: k) where
+  SingWith1 :: Sing a -> f a -> SingWith1 k f a
 
-data SomeSingWith1 (kproxy :: KProxy k) (f :: k -> *) where
-  SomeSingWith1 :: Sing a -> f a -> SomeSingWith1 'KProxy f
+data SomeSingWith1 (k :: Type) (f :: k -> Type) where
+  SomeSingWith1 :: forall (a :: k) (f :: k -> Type).
+    Sing a -> f a -> SomeSingWith1 k f
 
-type SomeSingWith1' = SomeSingWith1 'KProxy
+type family SomeSingWith1' (f :: k -> Type) :: Type where
+  SomeSingWith1' (f :: k -> Type) = SomeSingWith1 k f
 
-data SomeSingWith2 (kproxy1 :: KProxy k) (kproxy2 :: KProxy j) (f :: k -> j -> *) where
-  SomeSingWith2 :: Sing a -> Sing b -> f a b -> SomeSingWith2 'KProxy 'KProxy f
+data SomeSingWith2 (k :: Type) (j :: Type) (f :: k -> j -> Type) where
+  SomeSingWith2 :: forall (a :: k) (b :: j) (f :: k -> j -> Type).
+    Sing a -> Sing b -> f a b -> SomeSingWith2 k j f
 
-type SomeSingWith2' = SomeSingWith2 'KProxy 'KProxy
+type family SomeSingWith2' (f :: k -> j -> Type) :: Type where
+  SomeSingWith2' (f :: k -> j -> Type) = SomeSingWith2 k j f
 
 {- $appliedClasses
 
@@ -237,21 +255,21 @@ type SomeSingWith2' = SomeSingWith2 'KProxy 'KProxy
  this:
 
  > data Thing = ...
- > type family ToType (x :: Thing) :: * where ...
+ > type family ToType (x :: Thing) :: Type where ...
  > instance EqApplied1 ToTypeSym0 where
  >   eqApplied1 _ x (Applied a) (Applied b) = $(enumerateConstructors 'x ''Thing =<< [|a == b|])
 
 -}
-class EqApplied1 (f :: TyFun k * -> *) where
+class EqApplied1 (f :: TyFun k Type -> Type) where
   eqApplied1 :: proxy f -> Sing a -> Apply f a -> Apply f a -> Bool
 
-class HashableApplied1 (f :: TyFun k * -> *) where
+class HashableApplied1 (f :: TyFun k Type -> Type) where
   hashWithSaltApplied1 :: proxy f -> Sing a -> Int -> Apply f a -> Int
 
-class ToJSONApplied1 (f :: TyFun k * -> *) where
+class ToJSONApplied1 (f :: TyFun k Type -> Type) where
   toJSONApplied1 :: proxy f -> Sing a -> Apply f a -> Aeson.Value
 
-class FromJSONApplied1 (f :: TyFun k * -> *) where
+class FromJSONApplied1 (f :: TyFun k Type -> Type) where
   parseJSONApplied1 :: proxy f -> Sing a -> Aeson.Value -> Aeson.Parser (Apply f a)
 
 
@@ -287,7 +305,7 @@ instance (ShowKind kproxy1, ShowKind kproxy2, ShowSing2 f) => Show (SomeSingWith
       . showsPrecSing2 11 s1 s2 f
       )
 
-instance (ReadKind kproxy1, ReadKind kproxy2, ReadSing2 f) => Read (SomeSingWith2 kproxy1 kproxy2 f) where
+instance (ReadKind k, ReadKind j, ReadSing2 f) => Read (SomeSingWith2 k j f) where
   readPrec = parens $ prec 10 $ do
     Ident "SomeSingWith2" <- lexP
     SomeSing s1 <- step readPrecKind
@@ -306,7 +324,7 @@ instance (ToJSONKind kproxy1, ToJSONKind kproxy2, ToJSONSing2 f) => ToJSON (Some
   toJSON (SomeSingWith2 s1 s2 v) =
     toJSON [toJSONKind s1, toJSONKind s2, toJSONSing2 s1 s2 v]
 
-instance (FromJSONKind kproxy1, FromJSONKind kproxy2, FromJSONSing2 f) => FromJSON (SomeSingWith2 kproxy1 kproxy2 f) where
+instance (FromJSONKind k, FromJSONKind j, FromJSONSing2 f) => FromJSON (SomeSingWith2 k j f) where
   parseJSON (Aeson.Array xs) = case Vector.toList xs of
     [v1,v2,v] -> do
       SomeSing s1 <- parseJSONKind v1
@@ -316,12 +334,12 @@ instance (FromJSONKind kproxy1, FromJSONKind kproxy2, FromJSONSing2 f) => FromJS
     _ -> fail "SomeSingWith2: expected Array of three elements"
   parseJSON _ = mempty
 
-instance (HashableKind kproxy1, HashableSing1 f) => Hashable (SomeSingWith1 kproxy1 f) where
+instance (HashableKind k, HashableSing1 f) => Hashable (SomeSingWith1 k f) where
   hashWithSalt i (SomeSingWith1 s v) = i
     & flip hashWithSaltKind s
     & flip (hashWithSaltSing1 s) v
 
-showKind :: forall (kproxy :: KProxy k) (a :: k). ShowKind kproxy => Sing a -> String
+showKind :: forall (a :: k). ShowKind k => Sing a -> String
 showKind x = showsPrecKind 0 x ""
 
 readsPrecKind :: ReadKind kproxy => Int -> ReadS (SomeSing kproxy)

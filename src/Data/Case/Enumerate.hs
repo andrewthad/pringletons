@@ -1,4 +1,4 @@
-module Data.Case.Enumerate 
+module Data.Case.Enumerate
   ( enumerateConstructors
   ) where
 
@@ -19,7 +19,7 @@ import Control.Monad
 
 enumerateConstructors :: Name -> Name -> Exp -> Q Exp
 enumerateConstructors vname name expr = do
-  TyConI (DataD _ _ _ ctors _) <- reify name
+  TyConI (DataD _ _ _ _ ctors _) <- reify name
   matches <- forM ctors $ \(NormalC cname args) -> case args of
     [] -> return $ Match (ConP (sketchyNameSingletonize cname) []) (NormalB expr) []
     _ -> fail "constConstructors2: empty data constructor required"
@@ -27,6 +27,6 @@ enumerateConstructors vname name expr = do
 
 sketchyNameSingletonize :: Name -> Name
 sketchyNameSingletonize = id
-  . mkName . ('S':) . reverse 
+  . mkName . ('S':) . reverse
   . takeWhile (/= '.') . reverse . show
 

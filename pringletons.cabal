@@ -18,10 +18,10 @@ library
     Data.Singletons.Map
     Data.Singletons.Class
     Data.Case.Enumerate
-  build-depends:       
-      base >= 4.7 && < 5
+  build-depends:
+      base >= 4.9 && < 5
     , hashable
-    , singletons
+    , singletons >= 2.2 && < 2.3
     , aeson
     , text
     , vector
